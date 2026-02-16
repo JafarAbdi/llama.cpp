@@ -6,6 +6,8 @@
 
 #include "common.h"
 #include "llama.h"
+#include "llama-kv-cache.h"
+#include "llama-kv-cache-iswa.h"
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
@@ -1762,6 +1764,31 @@ private:
                     res->n_decode_total          = metrics.n_decode_total;
                     res->n_busy_slots_total      = metrics.n_busy_slots_total;
 
+                    // Get KV cache metrics from the first available slot
+                    llama_context * ctx_metrics = get_llama_context();
+                    if (ctx_metrics) {
+                        llama_memory_t mem = llama_get_memory(ctx_metrics);
+                        if (mem) {
+                            llama_kv_cache * kv = dynamic_cast<llama_kv_cache *>(mem);
+                            if (kv) {
+                                res->kv_cache_used_cells = kv->get_used();
+                                res->kv_cache_total_cells = kv->get_size();
+                            } else {
+                                llama_kv_cache_iswa * kv_iswa = dynamic_cast<llama_kv_cache_iswa *>(mem);
+                                if (kv_iswa) {
+                                    llama_kv_cache * kv_base = kv_iswa->get_base();
+                                    llama_kv_cache * kv_swa = kv_iswa->get_swa();
+                                    uint32_t used_base = kv_base ? kv_base->get_used() : 0;
+                                    uint32_t used_swa = kv_swa ? kv_swa->get_used() : 0;
+                                    uint32_t size_base = kv_base ? kv_base->get_size() : 0;
+                                    uint32_t size_swa = kv_swa ? kv_swa->get_size() : 0;
+                                    res->kv_cache_used_cells = used_base + used_swa;
+                                    res->kv_cache_total_cells = size_base + size_swa;
+                                }
+                            }
+                        }
+                    }
+
                     if (task.metrics_reset_bucket) {
                         metrics.reset_bucket();
                     }
@@ -3258,19 +3285,27 @@ void server_routes::init_routes() {
             {"gauge", {{
                     {"name",  "prompt_tokens_seconds"},
                     {"help",  "Average prompt throughput in tokens/s."},
-                    {"value",  res_task->n_prompt_tokens_processed ? 1.e3 / res_task->t_prompt_processing * res_task->n_prompt_tokens_processed : 0.}
+                    {"value", res_task->n_prompt_tokens_processed ? 1.e3 / res_task->t_prompt_processing * res_task->n_prompt_tokens_processed : 0.}
             },{
                     {"name",  "predicted_tokens_seconds"},
                     {"help",  "Average generation throughput in tokens/s."},
-                    {"value",  res_task->n_tokens_predicted ? 1.e3 / res_task->t_tokens_generation * res_task->n_tokens_predicted : 0.}
+                    {"value", res_task->n_tokens_predicted ? 1.e3 / res_task->t_tokens_generation * res_task->n_tokens_predicted : 0.}
             },{
                     {"name",  "requests_processing"},
                     {"help",  "Number of requests processing."},
-                    {"value",  (uint64_t) res_task->n_processing_slots}
+                    {"value", (uint64_t) res_task->n_processing_slots}
             },{
                     {"name",  "requests_deferred"},
                     {"help",  "Number of requests deferred."},
-                    {"value",  (uint64_t) res_task->n_tasks_deferred}
+                    {"value", (uint64_t) res_task->n_tasks_deferred}
+            },{
+                    {"name",  "kv_cache_usage_ratio"},
+                    {"help",  "KV-cache usage. 1 means 100 percent usage."},
+                    {"value", res_task->kv_cache_total_cells ? (float) res_task->kv_cache_used_cells / res_task->kv_cache_total_cells : 0.f}
+            },{
+                    {"name",  "kv_cache_tokens"},
+                    {"help",  "KV-cache tokens."},
+                    {"value", (uint64_t) res_task->kv_cache_used_cells}
             }}}
         };
 

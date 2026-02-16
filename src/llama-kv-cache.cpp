@@ -987,6 +987,14 @@ uint32_t llama_kv_cache::get_size() const {
     return cells.size();
 }
 
+uint32_t llama_kv_cache::get_used() const {
+    uint32_t used = 0;
+    for (uint32_t s = 0; s < n_stream; ++s) {
+        used += v_cells[s].get_used();
+    }
+    return used;
+}
+
 uint32_t llama_kv_cache::get_n_stream() const {
     return n_stream;
 }
