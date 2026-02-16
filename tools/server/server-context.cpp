@@ -1765,8 +1765,8 @@ private:
                     res->n_decode_total          = metrics.n_decode_total;
                     res->n_busy_slots_total      = metrics.n_busy_slots_total;
 
-                    // Get KV cache metrics from the first available slot
-                    llama_context * ctx_metrics = impl->ctx;
+                    // Get KV cache metrics from the main context
+                    llama_context * ctx_metrics = ctx;
                     if (ctx_metrics) {
                         llama_memory_t mem = llama_get_memory(ctx_metrics);
                         if (mem) {
