@@ -8,6 +8,7 @@
 #include "llama.h"
 #include "llama-kv-cache.h"
 #include "llama-kv-cache-iswa.h"
+#include "llama-memory.h"
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
@@ -1765,7 +1766,7 @@ private:
                     res->n_busy_slots_total      = metrics.n_busy_slots_total;
 
                     // Get KV cache metrics from the first available slot
-                    llama_context * ctx_metrics = get_llama_context();
+                    llama_context * ctx_metrics = impl->ctx;
                     if (ctx_metrics) {
                         llama_memory_t mem = llama_get_memory(ctx_metrics);
                         if (mem) {
